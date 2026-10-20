@@ -86,9 +86,31 @@ function get_next_issue_number() {
 }
 
 function create_draft() {
-    local next_date=$(get_next_tuesday)
+    local next_date=${1:-$(get_next_tuesday)}
+    local normalized_date
+
+    if [[ ! "$next_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
+        ! normalized_date=$(date -d "$next_date" +%Y-%m-%d 2>/dev/null) ||
+        [[ "$normalized_date" != "$next_date" ]]; then
+        echo "Invalid publication date: $next_date. Use YYYY-MM-DD." >&2
+        return 1
+    fi
+
+    if [[ $(date -d "$next_date" +%u) != 2 ]]; then
+        echo "Publication date must be a Tuesday: $next_date" >&2
+        return 1
+    fi
 
     ensure_no_future_drafts "$next_date"
+
+    local existing_file
+    for existing_file in "$DRAFTS_DIR"/"$next_date"-issue-*.md \
+        "$ARCHIVE_DIR"/"${next_date%%-*}"/"$next_date"-issue-*.md; do
+        if [ -e "$existing_file" ]; then
+            echo "An issue already exists for $next_date: $existing_file" >&2
+            return 1
+        fi
+    done
 
     local issue_num=$(get_next_issue_number)
     local filename="${next_date}-issue-${issue_num}.md"
@@ -102,10 +124,9 @@ function create_draft() {
     # Ensure drafts dir exists
     mkdir -p "$DRAFTS_DIR"
 
-    cp "$TEMPLATE_FILE" "$filepath"
-    
-    # Replace [Date] in the template
-    sed -i "s/\[Date\]/$next_date/g" "$filepath"
+    # Fill both the issue heading and any date placeholder in the template.
+    sed -e "s/#0x/#$issue_num/g" -e "s/\[Date\]/$next_date/g" \
+        "$TEMPLATE_FILE" > "$filepath" || return 1
     
     echo "Created new draft: $filepath"
 }
@@ -160,13 +181,13 @@ function archive_draft() {
 
 case "$command" in
     "new")
-        create_draft
+        create_draft "$2"
         ;;
     "archive")
         archive_draft "$2"
         ;;
     *)
-        echo "Usage: $0 {new|archive [filename]}"
+        echo "Usage: $0 {new [YYYY-MM-DD]|archive [filename]}"
         exit 1
         ;;
 esac
