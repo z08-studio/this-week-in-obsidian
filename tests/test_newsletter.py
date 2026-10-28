@@ -60,6 +60,20 @@ class NewsletterScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.root / "drafts/2026-10-27-issue-44.md").exists())
 
+    def test_create_and_archive_round_trip(self):
+        created = self.run_script("new", "2026-10-20")
+        self.assertEqual(created.returncode, 0, created.stderr)
+        draft = self.root / "drafts/2026-10-20-issue-44.md"
+        content = draft.read_text()
+
+        archived = self.run_script("archive", draft.name)
+        self.assertEqual(archived.returncode, 0, archived.stderr)
+        self.assertFalse(draft.exists())
+        self.assertEqual(
+            (self.root / "archive/2026/2026-10-20-issue-44.md").read_text(),
+            content,
+        )
+
     def test_existing_draft_or_archive_prevents_duplicate_date(self):
         for directory in ("drafts", "archive/2026"):
             with self.subTest(directory=directory):

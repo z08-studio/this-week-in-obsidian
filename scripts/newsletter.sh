@@ -8,6 +8,15 @@ TEMPLATE_FILE="$BASE_DIR/templates/newsletter-template.md"
 
 command=$1
 
+function format_publication_date() {
+    local publication_date=$1
+    local format=$2
+
+    # GNU date (Linux) and BSD date (macOS) use different parsing options.
+    date -d "$publication_date" "$format" 2>/dev/null ||
+        date -j -f "%Y-%m-%d" "$publication_date" "$format" 2>/dev/null
+}
+
 function get_next_tuesday() {
     # Return the upcoming Tuesday.
     # Always return the next Tuesday.
@@ -22,7 +31,8 @@ function get_next_tuesday() {
         days_ahead=$((7 - dow + 2))
     fi
 
-    date -d "+${days_ahead} days" +%Y-%m-%d
+    date -d "+${days_ahead} days" +%Y-%m-%d 2>/dev/null ||
+        date -v+"${days_ahead}"d +%Y-%m-%d
 }
 
 function ensure_no_future_drafts() {
@@ -90,13 +100,13 @@ function create_draft() {
     local normalized_date
 
     if [[ ! "$next_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
-        ! normalized_date=$(date -d "$next_date" +%Y-%m-%d 2>/dev/null) ||
+        ! normalized_date=$(format_publication_date "$next_date" +%Y-%m-%d) ||
         [[ "$normalized_date" != "$next_date" ]]; then
         echo "Invalid publication date: $next_date. Use YYYY-MM-DD." >&2
         return 1
     fi
 
-    if [[ $(date -d "$next_date" +%u) != 2 ]]; then
+    if [[ $(format_publication_date "$next_date" +%u) != 2 ]]; then
         echo "Publication date must be a Tuesday: $next_date" >&2
         return 1
     fi
