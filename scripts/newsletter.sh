@@ -4,7 +4,6 @@
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRAFTS_DIR="$BASE_DIR/drafts"
 ARCHIVE_DIR="$BASE_DIR/archive"
-TEMPLATE_FILE="$BASE_DIR/templates/newsletter-template.md"
 
 command=$1
 
@@ -134,9 +133,8 @@ function create_draft() {
     # Ensure drafts dir exists
     mkdir -p "$DRAFTS_DIR"
 
-    # Fill both the issue heading and any date placeholder in the template.
-    sed -e "s/#0x/#$issue_num/g" -e "s/\[Date\]/$next_date/g" \
-        "$TEMPLATE_FILE" > "$filepath" || return 1
+    # Copy the reviewed Formatted output from the generator into this blank file.
+    : > "$filepath" || return 1
     
     echo "Created new draft: $filepath"
 }
