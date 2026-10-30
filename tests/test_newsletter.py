@@ -86,6 +86,33 @@ class NewsletterScriptTests(unittest.TestCase):
                 self.assertFalse((self.root / "drafts/2026-10-20-issue-45.md").exists())
                 existing.unlink()
 
+    def test_archive_does_not_overwrite_published_issue(self):
+        draft = self.root / "drafts/2026-10-20-issue-44.md"
+        archive = self.root / "archive/2026/2026-10-20-issue-44.md"
+        draft.write_text("Draft\n")
+        archive.write_text("Published\n")
+        result = self.run_script("archive", draft.name)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(draft.read_text(), "Draft\n")
+        self.assertEqual(archive.read_text(), "Published\n")
+
+    def test_archive_rejects_files_outside_drafts(self):
+        external = self.root / "2026-10-20-issue-44.md"
+        external.write_text("Outside drafts\n")
+        result = self.run_script("archive", str(external))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(external.read_text(), "Outside drafts\n")
+
+    def test_archive_rejects_invalid_filenames_and_dates(self):
+        for filename in ("notes.md", "2026-02-30-issue-44.md", "2026-10-20-issue-x.md"):
+            with self.subTest(filename=filename):
+                draft = self.root / "drafts" / filename
+                draft.write_text("Draft\n")
+                result = self.run_script("archive", filename)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(draft.read_text(), "Draft\n")
+                draft.unlink()
+
     def test_invalid_dates_leave_drafts_empty(self):
         for publication_date in ("2026-02-30", "2026-10-21", "2026-1-6", "tomorrow"):
             with self.subTest(publication_date=publication_date):

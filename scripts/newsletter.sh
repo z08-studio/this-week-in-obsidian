@@ -5,7 +5,7 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRAFTS_DIR="$BASE_DIR/drafts"
 ARCHIVE_DIR="$BASE_DIR/archive"
 
-command=$1
+command=${1:-}
 
 function format_publication_date() {
     local publication_date=$1
@@ -17,7 +17,6 @@ function format_publication_date() {
 }
 
 function get_next_tuesday() {
-    # Return the upcoming Tuesday.
     # Always return the next Tuesday.
     local dow days_ahead
 
@@ -131,7 +130,7 @@ function create_draft() {
     fi
     
     # Ensure drafts dir exists
-    mkdir -p "$DRAFTS_DIR"
+    mkdir -p "$DRAFTS_DIR" || return 1
 
     # Copy the reviewed Formatted output from the generator into this blank file.
     : > "$filepath" || return 1
@@ -140,7 +139,7 @@ function create_draft() {
 }
 
 function archive_draft() {
-    local file_path=$1
+    local file_path=${1:-}
     
     # If no file specified, try to pick the only one in drafts
     if [ -z "$file_path" ]; then
@@ -170,29 +169,47 @@ function archive_draft() {
         fi
     fi
     
-    local filename=$(basename "$file_path")
-    # Extract year from filename YYYY-MM-DD...
-    local year=$(echo "$filename" | cut -d'-' -f1)
-    
-    if [[ ! "$year" =~ ^[0-9]{4}$ ]]; then
-        echo "Could not extract year from filename: $filename"
-        echo "Using current year."
-        year=$(date +%Y)
+    if [[ -L "$file_path" ]] ||
+        [[ $(cd "$(dirname "$file_path")" && pwd) != "$DRAFTS_DIR" ]]; then
+        echo "Only a regular file in the drafts directory can be archived." >&2
+        return 1
     fi
-    
+
+    local filename=$(basename "$file_path")
+    if [[ ! $filename =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})-issue-([0-9]+)\.md$ ]]; then
+        echo "Invalid draft filename: $filename" >&2
+        return 1
+    fi
+    local publication_date=${BASH_REMATCH[1]}
+    local normalized_date
+    if ! normalized_date=$(format_publication_date "$publication_date" +%Y-%m-%d) ||
+        [[ "$normalized_date" != "$publication_date" ]]; then
+        echo "Invalid draft publication date: $publication_date" >&2
+        return 1
+    fi
+
+    local year=${publication_date%%-*}
     local target_dir="$ARCHIVE_DIR/$year"
-    mkdir -p "$target_dir"
-    
-    mv "$file_path" "$target_dir/"
+    mkdir -p "$target_dir" || return 1
+
+    if [ -e "$target_dir/$filename" ]; then
+        echo "Archive already exists: $target_dir/$filename" >&2
+        return 1
+    fi
+    mv -n "$file_path" "$target_dir/" || return 1
+    if [ -e "$file_path" ]; then
+        echo "Draft was not moved; archive may already exist." >&2
+        return 1
+    fi
     echo "Archived $filename to $target_dir/"
 }
 
 case "$command" in
     "new")
-        create_draft "$2"
+        create_draft "${2:-}"
         ;;
     "archive")
-        archive_draft "$2"
+        archive_draft "${2:-}"
         ;;
     *)
         echo "Usage: $0 {new [YYYY-MM-DD]|archive [filename]}"
